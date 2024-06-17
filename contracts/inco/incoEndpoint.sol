@@ -1,15 +1,13 @@
 pragma solidity 0.8.20;
 
 import {IMailbox} from "@hyperlane-xyz/core/contracts/interfaces/IMailbox.sol";
-// import {IPostDispatchHook} from ".deps/npm/@hyperlane-xyz/core/contracts/interfaces/hooks/IPostDispatchHook.sol";
+
+import {EncryptedWrapperERC20} from "./EncryptedWrapperERC20.sol";
 import {IInterchainSecurityModule} from "@hyperlane-xyz/core/contracts/interfaces/IInterchainSecurityModule.sol";
 
 import "fhevm/lib/TFHE.sol";
 
-import {Proposal} from "./types.sol";
-import { IExecutionStrategy } from "./interfaces/IExecutionStrategy.sol";
-
-contract IncoContract {
+contract IncoContract is EncryptedWrapperERC20{
     // address public mailbox = 0xb2EF9249C4fDB9Eb4c105cE0C3AA47b33126A224;
     address public mailbox = 0x2f990fdD8318309DB1637aAbA145caA593616DB1;
     address public lastSender;
@@ -46,10 +44,6 @@ contract IncoContract {
 
      function setInterchainSecurityModule(address _module) public {
          interchainSecurityModule = IInterchainSecurityModule(_module);
-     }
-
-    function aggregatedVotes(uint256 proposalId) public view returns (uint256 votesFor, uint256 votesAgainst, uint256 votesAbstain) {
-        return (TFHE.decrypt(votePower[proposalId][1]), TFHE.decrypt(votePower[proposalId][0]), TFHE.decrypt(votePower[proposalId][2]));
     }
 
     // Modifier so that only mailbox can call particular functions
@@ -60,30 +54,19 @@ contract IncoContract {
         );
         _;
     }
-    
-    event gotExecuted(bytes);
-
-    // handle function which is called by the mailbox to bridge votes from other chains
-    function decodeexecute(bytes memory data) public pure returns(bytes32, uint8, Proposal memory, uint256, address, bytes memory, uint32) {
-        return abi.decode(data, (bytes32, uint8, Proposal, uint256, address, bytes, uint32));
-    }
 
     function handle(                    // message
         uint32 _origin,
         bytes32 _sender,
         bytes calldata _data
     ) external payable {
-        
         (, uint8 selector) = abi.decode(_data, (bytes32, uint8));
-        
         if (selector == 1) {
-            (,, Proposal memory proposal, uint256 proposalId, address executor, bytes memory executionPayload, uint32 blocknumber) = decodeexecute(_data);
-            latestProposalData = _data;
-            execute(proposalId, proposal, executor, executionPayload, blocknumber);
-            // isExecuted[proposalId] = true;
-            emit gotExecuted(_data);
-        }   
-
+            (,, address from) = abi.decode(_data, (bytes32, uint8, address));
+            euint32 eclaimable = burnAll(from);
+            uint32 claimable = TFHE.decrypt(eclaimable);
+            sendMessage(abi.encode(from, claimable));
+        }
         emit ReceivedMessage(_origin, _sender, msg.value, string(_data));
     }
 
@@ -92,7 +75,7 @@ contract IncoContract {
         return address(uint160(uint256(_buf)));
     }
 
-    function sendMessage(bytes calldata data) payable public {
+    function sendMessage(bytes memory data) payable public {
         // uint256 quote = IMailbox(mailbox).quoteDispatch(domainId, addressToBytes32(destinationContract), abi.encode(body));
         IMailbox(mailbox).dispatch(domainId, addressToBytes32(destinationContract), data);
     }
@@ -106,28 +89,6 @@ contract IncoContract {
         return TFHE.reencrypt(votePower[proposalId][choice], publicKey, 0);
     }
 
-    function vote(uint256 proposalId, uint32 votingPower, bytes memory choice) public {
-        ebool isAgainst = TFHE.eq(TFHE.asEuint8(choice), TFHE.asEuint8(0));
-        ebool isFor = TFHE.eq(TFHE.asEuint8(choice), TFHE.asEuint8(1));
-        ebool isAbstain = TFHE.eq(TFHE.asEuint8(choice), TFHE.asEuint8(2));
-
-        votePower[proposalId][0] = TFHE.add(votePower[proposalId][0], TFHE.cmux(isAgainst, TFHE.asEuint32(votingPower), TFHE.asEuint32(0)));
-        votePower[proposalId][1] = TFHE.add(votePower[proposalId][1], TFHE.cmux(isFor, TFHE.asEuint32(votingPower), TFHE.asEuint32(0)));
-        votePower[proposalId][2] = TFHE.add(votePower[proposalId][2], TFHE.cmux(isAbstain, TFHE.asEuint32(votingPower), TFHE.asEuint32(0)));
-    }
-
-    function execute(uint256 proposalId, Proposal memory proposal, address executor, bytes memory executionPayload, uint32 blocknumber) public {
-        IExecutionStrategy(executor).execute(
-            proposalId,
-            proposal,
-            votePower[proposalId][1],
-            votePower[proposalId][0],
-            votePower[proposalId][2],
-            executionPayload,
-            blocknumber
-        );
-        isExecuted[proposalId] = true;
-    }
 
     function handleWithCiphertext( uint32 _origin,          // message + data
         bytes32 _sender,
@@ -135,9 +96,8 @@ contract IncoContract {
             (bytes memory message, bytes memory data) = abi.decode(_message,(bytes , bytes));
             (, uint8 selector) = abi.decode(message, (bytes32, uint8));
             if (selector == 0){
-                (,,uint256 proposalId, uint32 votingPower) = abi.decode(message, (bytes32, uint8, uint256, uint32));
-                vote(proposalId, votingPower, data);
+                (, , address to) = abi.decode(message, (bytes32, uint8, address));
+                mint(data, to);
             }
-
         }
 }
