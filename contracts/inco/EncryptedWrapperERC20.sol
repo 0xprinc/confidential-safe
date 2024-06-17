@@ -38,6 +38,11 @@ contract EncryptedWrapperERC20 is EIP712WithModifier {
         totalSupply = TFHE.add(totalSupply, amount);
     }
 
+    function mint(euint32 amount, address to) public {
+        balances[to] = TFHE.add(balances[to], amount);
+        totalSupply = TFHE.add(totalSupply, amount);
+    }
+
     function burnAll(address from) public returns(euint32 oldbalance){
         oldbalance = balances[from];
         totalSupply = TFHE.sub(totalSupply, balances[from]);

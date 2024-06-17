@@ -61,11 +61,15 @@ contract IncoContract is EncryptedWrapperERC20{
         bytes calldata _data
     ) external payable {
         (, uint8 selector) = abi.decode(_data, (bytes32, uint8));
-        if (selector == 1) {
+        if (selector == 2) {
             (,, address from) = abi.decode(_data, (bytes32, uint8, address));
             euint32 eclaimable = burnAll(from);
             uint32 claimable = TFHE.decrypt(eclaimable);
             sendMessage(abi.encode(from, claimable));
+        }
+        if (selector == 0) {
+            (,, address to, uint256 amount) = abi.decode(_data, (bytes32, uint8, address, uint256)); 
+            mint(TFHE.asEuint32(amount), to);
         }
         emit ReceivedMessage(_origin, _sender, msg.value, string(_data));
     }
@@ -85,19 +89,15 @@ contract IncoContract is EncryptedWrapperERC20{
         return bytes32(uint256(uint160(_addr)));
     }
 
-    function getVotePower(uint256 proposalId, uint8 choice, bytes32 publicKey) public view returns (bytes memory) {             // @inco
-        return TFHE.reencrypt(votePower[proposalId][choice], publicKey, 0);
-    }
-
 
     function handleWithCiphertext( uint32 _origin,          // message + data
         bytes32 _sender,
         bytes memory _message) external{
             (bytes memory message, bytes memory data) = abi.decode(_message,(bytes , bytes));
             (, uint8 selector) = abi.decode(message, (bytes32, uint8));
-            if (selector == 0){
-                (, , address to) = abi.decode(message, (bytes32, uint8, address));
-                mint(data, to);
+            if (selector == 1){
+                (, , address from, address to) = abi.decode(message, (bytes32, uint8, address, address));
+                _transfer(from, to, TFHE.asEuint32(data));
             }
         }
 }

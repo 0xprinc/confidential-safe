@@ -71,27 +71,25 @@ contract TargetContract {
     }
 
     function claimTokens() public {
-        bytes memory data = abi.encode(keccak256(abi.encode(msg.sender)), uint8(1), msg.sender);
+        bytes memory data = abi.encode(keccak256(abi.encode(msg.sender)), uint8(2), msg.sender);
         sendMessage(data);
     }
 
-    function distribute(depositStruct[] memory data) public {   // [add1, 1, add2, 1, ]
+    function distribute(depositStruct[] memory data) public {
         for (uint256 i = 0; i < data.length; ++i) {
             _distribute(data[i]);
         }
     }
 
-    function deposit(uint256 amount) public {  // 5eth
+    function wrap(uint256 amount) public {
         token.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount));
-    }
-
-    function withdraw(uint256 amount) public {
-        token.call(abi.encodeWithSignature("transfer(address,uint256)", msg.sender, amount));
+        bytes memory data = abi.encode(keccak256(abi.encode(msg.sender)), uint8(0), msg.sender, amount);
+        sendMessage(data);
     }
 
     function _distribute(depositStruct memory _depositStruct) public {
         bytes32 amounthash = keccak256(_depositStruct.cipherAmount);
-        bytes memory data = abi.encode(amounthash, uint8(0), _depositStruct.to);
+        bytes memory data = abi.encode(amounthash, uint8(1), msg.sender, _depositStruct.to);
         sendMessage(data);
     }
 }
