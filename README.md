@@ -1,6 +1,4 @@
 ### Description :
-Facilitating confidential token distribution from a single safe to multiple safes:
-
 - The total tokens for distribution are first sent to the baseEndpoint contract and then wrapped into encryptedERC20 tokens on the incoEndpoint.
 - During distribution, an array containing `{address, cipherAmount}` is transmitted to baseEndpoint. This data is subsequently relayed to Inco using hyperlane, enabling the transfer of corresponding amounts of encryptedERC20 tokens to the recipients.
 - Upon calling the claim function on baseEndpoint, recipients burn their encryptedERC20 tokens, prompting the baseEndpoint to transfer an equivalent amount of original tokens to the recipient.
